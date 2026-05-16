@@ -35,8 +35,8 @@ psx-analytics/
 ├── scripts/
 │   ├── psx_ingest.py          ← F-019+F-021+F-024: manifest-based ingest + corporate-action versioning
 │   └── duckdb_manager.py      ← F-022+GSR-005: date-range guard + read-only serving connection
-├── app/
-│   └── api.py                 ← FastAPI: F-022 validate_date_range() at every fact endpoint
+├── serving/
+│   └── psx_analytics_api.py                 ← FastAPI: F-022 validate_date_range() at every fact endpoint
 ├── dbt/
 │   ├── models/
 │   │   ├── staging/
@@ -49,10 +49,10 @@ psx-analytics/
 │   └── dags/
 │       └── psx_pipeline_dag.py    ← detect → ingest → schema-init → dbt run → DQ assertions
 ├── tests/
-│   └── test_p3_hardening.py       ← F-019/F-022/F-023/F-025 regression suite
+│   └── test_psx_analytics_regression.py  ← F-019/F-022/F-023/F-025 regression suite
 ├── governance/
-│   ├── P3-HARDENING-LOG.md
-│   └── P3-CLOSURE-DECLARATION.md
+│   ├── hardening-log.md
+│   └── closure-declaration.md
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
@@ -99,7 +99,7 @@ pip install -r requirements.txt
 python3 -c "from scripts.duckdb_manager import initialize_schema; initialize_schema()"
 
 # 4. Run regression suite (no live data required)
-pytest tests/test_p3_hardening.py -v
+pytest tests/test_psx_analytics_regression.py -v
 # Expected: all F-019/F-022/F-023/F-025 tests pass
 
 # 5. Start serving API
@@ -274,14 +274,14 @@ python3 -c "from scripts.psx_ingest import ingest_psx_csv; ingest_psx_csv('tests
 
 | Suite | Command | Coverage |
 |---|---|---|
-| Full hardening regression | `pytest tests/test_p3_hardening.py -v` | F-019/F-021/F-022/F-023/F-025/GSR-005 |
-| With coverage report | `pytest tests/test_p3_hardening.py -v --cov=scripts --cov=app` | All modules |
-| FastAPI endpoints only | `pytest tests/test_p3_hardening.py -v -k "api"` | F-022 guard paths |
+| Full hardening regression | `pytest tests/test_psx_analytics_regression.py -v` | F-019/F-021/F-022/F-023/F-025/GSR-005 |
+| With coverage report | `pytest tests/test_psx_analytics_regression.py -v --cov=scripts --cov=serving` | All modules |
+| FastAPI endpoints only | `pytest tests/test_psx_analytics_regression.py -v -k "api"` | F-022 guard paths |
 
 ### Lint
 
 ```bash
-ruff check scripts/ app/ && black --check scripts/ app/
+ruff check scripts/ serving/ && black --check scripts/ serving/
 ```
 
 ---
