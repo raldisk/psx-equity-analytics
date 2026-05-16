@@ -1,0 +1,38 @@
+# P3 PSX Analytics — Python dependencies
+# Pinned to versions compatible with Python 3.11 and the P2 Airflow 2.8.0 environment.
+
+# ── Database ─────────────────────────────────────────────────────────────────
+duckdb>=0.10.0,<1.0.0
+
+# ── Data processing ───────────────────────────────────────────────────────────
+pandas>=2.1.0,<3.0.0
+pyarrow>=14.0.0,<16.0.0        # Parquet read/write backend for pandas
+
+# ── Analytics (F-025: SARIMA) ─────────────────────────────────────────────────
+# statsmodels is OPTIONAL — SARIMA failure is handled per-symbol (sarima_status).
+# Pipeline does not fail if statsmodels is absent; affected symbols get
+# sarima_status=SKIPPED_NO_STATSMODELS.
+statsmodels>=0.14.0,<0.15.0
+numpy>=1.26.0,<2.0.0
+
+# ── Serving ────────────────────────────────────────────────────────────────────
+fastapi>=0.109.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+
+# ── dbt ───────────────────────────────────────────────────────────────────────
+dbt-core>=1.7.0,<2.0.0
+dbt-duckdb>=1.7.0,<2.0.0       # DuckDB adapter for dbt
+# Note: dbt Python models require duckdb[python] which is included in duckdb>=0.10.0
+
+# ── Airflow (shared with P2) ───────────────────────────────────────────────────
+# P3 reuses the P2 Airflow 2.8.0 installation.
+# Do not re-install Airflow independently for P3.
+# apache-airflow==2.8.0  ← already in P2 environment
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+pendulum>=3.0.0,<4.0.0
+
+# ── Testing ────────────────────────────────────────────────────────────────────
+pytest>=8.0.0,<9.0.0
+pytest-cov>=4.1.0,<5.0.0
+httpx>=0.26.0,<1.0.0            # FastAPI test client
