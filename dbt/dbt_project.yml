@@ -1,0 +1,43 @@
+name: 'psx_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'psx_analytics'
+
+model-paths:  ["models"]
+test-paths:   ["models/tests"]
+seed-paths:   ["seeds"]
+macro-paths:  ["macros"]
+target-path:  "target"
+clean-targets: ["target", "dbt_packages"]
+
+# F-025: Enforce statsmodels presence for SARIMA models at compile time.
+# A missing statsmodels package causes dbt Python model import to fail.
+# The pre-hook warns but does not block — SARIMA failure is handled per-symbol
+# in the model itself (sarima_status=SKIPPED_NO_STATSMODELS).
+on-run-start:
+  - "{{ log('P3 PSX Analytics pipeline starting. SARIMA uses per-symbol isolation (F-025).', info=True) }}"
+
+models:
+  psx_analytics:
+    staging:
+      +materialized: view
+      +schema: staging
+      +tags: ['staging', 'psx-eod']
+
+    marts:
+      +materialized: table
+      +schema: marts
+      +tags: ['marts', 'psx-analytics']
+      # fact_daily_analytics is a Python model — no incremental_strategy needed
+
+tests:
+  psx_analytics:
+    +store_failures: true
+    +schema: dbt_test__audit
+
+vars:
+  # DuckDB file path — must match PSX_DATA_ROOT in environment
+  psx_data_root: "{{ env_var('PSX_DATA_ROOT', '/opt/airflow/data') }}"
+  # Maximum date range for fact queries (days) — matches API guard
+  max_date_range_days: "{{ env_var('PSX_MAX_DATE_RANGE_DAYS', '90') | int }}"

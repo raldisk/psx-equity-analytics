@@ -1,0 +1,28 @@
+# dbt profiles.yml for P3 PSX Analytics — DO NOT COMMIT with real paths
+# Copy to dbt/profiles/profiles.yml and set PSX_DATA_ROOT in environment.
+# This file is in .gitignore.
+
+psx_analytics:
+  target: dev
+
+  outputs:
+    # Production: DuckDB at configured path
+    prod:
+      type: duckdb
+      path: "{{ env_var('PSX_DUCKDB_PATH', '/opt/airflow/data/psx_analytics.duckdb') }}"
+      threads: 2
+      # F-022: memory limit applied at connection level in duckdb_manager.py
+      # dbt connections do not apply the memory limit — pipeline connections
+      # are opened via duckdb_manager.pipeline_connection(), not dbt directly.
+
+    # Dev: local DuckDB in project directory
+    dev:
+      type: duckdb
+      path: "data/psx_analytics_dev.duckdb"
+      threads: 2
+
+    # CI: ephemeral in-memory DuckDB for schema/model compile tests
+    ci:
+      type: duckdb
+      path: ":memory:"
+      threads: 1
