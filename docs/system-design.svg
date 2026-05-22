@@ -1,0 +1,99 @@
+<svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" font-family="monospace" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="860" height="340" fill="#fafafa" rx="6"/>
+
+  <!-- Title -->
+  <text x="430" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#222">PSX Analytics — Data Flow (P3)</text>
+
+  <!-- Row 1: Ingestion layer -->
+  <!-- PSX CSV Source -->
+  <rect x="20" y="60" width="120" height="50" rx="6" fill="#e8f4fd" stroke="#5b9bd5" stroke-width="1.5"/>
+  <text x="80" y="82" text-anchor="middle" fill="#1a5276" font-weight="bold">PSX CSV</text>
+  <text x="80" y="98" text-anchor="middle" fill="#1a5276">Source Files</text>
+
+  <!-- Arrow PSX CSV → psx_ingest.py -->
+  <line x1="140" y1="85" x2="188" y2="85" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- psx_ingest.py -->
+  <rect x="190" y="60" width="130" height="50" rx="6" fill="#e9f7ef" stroke="#27ae60" stroke-width="1.5"/>
+  <text x="255" y="79" text-anchor="middle" fill="#1e8449" font-weight="bold">psx_ingest.py</text>
+  <text x="255" y="95" text-anchor="middle" fill="#1e8449">sha256 · amendment</text>
+  <text x="255" y="107" text-anchor="middle" fill="#1e8449">detection</text>
+
+  <!-- Arrow psx_ingest.py → manifest.json -->
+  <line x1="320" y1="85" x2="368" y2="85" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- manifest.json -->
+  <rect x="370" y="60" width="120" height="50" rx="6" fill="#fef9e7" stroke="#f39c12" stroke-width="1.5"/>
+  <text x="430" y="82" text-anchor="middle" fill="#9a7d0a" font-weight="bold">manifest.json</text>
+  <text x="430" y="98" text-anchor="middle" fill="#9a7d0a">path authority</text>
+
+  <!-- Arrow manifest.json → DuckDB (write) -->
+  <line x1="490" y1="85" x2="538" y2="85" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="514" y="78" text-anchor="middle" fill="#888" font-size="10">pipeline_connection()</text>
+
+  <!-- DuckDB -->
+  <rect x="540" y="50" width="130" height="70" rx="6" fill="#f5eef8" stroke="#8e44ad" stroke-width="2"/>
+  <text x="605" y="76" text-anchor="middle" fill="#6c3483" font-weight="bold">DuckDB</text>
+  <text x="605" y="92" text-anchor="middle" fill="#6c3483">psx_analytics.duckdb</text>
+  <text x="605" y="108" text-anchor="middle" fill="#6c3483" font-size="10">read_only (serving)</text>
+
+  <!-- Row 2: Transformation -->
+  <!-- Arrow DuckDB → dbt -->
+  <line x1="605" y1="120" x2="605" y2="168" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- dbt (stg + marts) -->
+  <rect x="540" y="170" width="130" height="50" rx="6" fill="#ebf5fb" stroke="#2980b9" stroke-width="1.5"/>
+  <text x="605" y="191" text-anchor="middle" fill="#1a5276" font-weight="bold">dbt</text>
+  <text x="605" y="207" text-anchor="middle" fill="#1a5276">stg_psx_eod → mart</text>
+
+  <!-- Arrow dbt → FastAPI -->
+  <line x1="540" y1="195" x2="490" y2="195" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- FastAPI serving layer -->
+  <rect x="340" y="170" width="148" height="50" rx="6" fill="#fdedec" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="414" y="191" text-anchor="middle" fill="#922b21" font-weight="bold">FastAPI</text>
+  <text x="414" y="207" text-anchor="middle" fill="#922b21">psx_analytics_api.py</text>
+
+  <!-- Arrow FastAPI → Client -->
+  <line x1="340" y1="195" x2="258" y2="195" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Client -->
+  <rect x="130" y="170" width="126" height="50" rx="6" fill="#f0f0f0" stroke="#888" stroke-width="1.5"/>
+  <text x="193" y="191" text-anchor="middle" fill="#444" font-weight="bold">API Client</text>
+  <text x="193" y="207" text-anchor="middle" fill="#444">JSON over HTTP</text>
+
+  <!-- Row 3: Observability -->
+  <!-- Prometheus -->
+  <rect x="540" y="260" width="130" height="50" rx="6" fill="#fef5e7" stroke="#e67e22" stroke-width="1.5"/>
+  <text x="605" y="282" text-anchor="middle" fill="#784212" font-weight="bold">Prometheus</text>
+  <text x="605" y="298" text-anchor="middle" fill="#784212">/metrics scrape</text>
+
+  <!-- Arrow FastAPI → Prometheus (scrape) -->
+  <line x1="605" y1="220" x2="605" y2="258" stroke="#aaa" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Grafana -->
+  <rect x="700" y="260" width="130" height="50" rx="6" fill="#eafaf1" stroke="#27ae60" stroke-width="1.5"/>
+  <text x="765" y="282" text-anchor="middle" fill="#1e8449" font-weight="bold">Grafana</text>
+  <text x="765" y="298" text-anchor="middle" fill="#1e8449">Dashboard</text>
+
+  <!-- Arrow Prometheus → Grafana -->
+  <line x1="670" y1="285" x2="698" y2="285" stroke="#aaa" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Airflow DAG label -->
+  <rect x="20" y="170" width="100" height="50" rx="6" fill="#f0f0f0" stroke="#aaa" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="70" y="191" text-anchor="middle" fill="#666" font-size="11">Airflow DAG</text>
+  <text x="70" y="207" text-anchor="middle" fill="#666" font-size="11">orchestrates</text>
+
+  <!-- Legend -->
+  <line x1="700" y1="60" x2="730" y2="60" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="738" y="64" fill="#555" font-size="10">data flow</text>
+  <line x1="700" y1="80" x2="730" y2="80" stroke="#aaa" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="738" y="84" fill="#aaa" font-size="10">metrics / scrape</text>
+</svg>
