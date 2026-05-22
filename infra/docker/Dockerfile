@@ -1,9 +1,9 @@
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 WORKDIR /build
 COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir --prefix=/install -e ".[stats]"
 
-FROM python:3.11-slim AS final
+FROM python:3.14-slim AS final
 LABEL maintainer="raldisk@heraldcollamar.com"
 
 RUN groupadd --gid 1001 appgroup && \
