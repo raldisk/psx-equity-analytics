@@ -6,7 +6,7 @@ duckdb>=0.10.0,<1.0.0
 
 # ── Data processing ───────────────────────────────────────────────────────────
 pandas>=2.1.0,<3.0.0
-pyarrow>=14.0.0,<16.0.0        # Parquet read/write backend for pandas
+pyarrow>=14.0.0,<25.0.0        # Parquet read/write backend for pandas
 
 # ── Analytics (F-025: SARIMA) ─────────────────────────────────────────────────
 # statsmodels is OPTIONAL — SARIMA failure is handled per-symbol (sarima_status).
