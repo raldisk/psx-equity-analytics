@@ -19,6 +19,7 @@ Architecture boundary:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -26,6 +27,56 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
+
+from scripts.duckdb_manager import validate_date_range  # noqa: F401
+
+
+# ── Structured logging — JsonFormatter (same pattern as P2-PROP-13) ───────────
+
+class _JsonFormatter(logging.Formatter):
+    """Emit each log record as a single-line JSON object for structured log ingestion."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "service": "psx-analytics",
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def _configure_logging() -> None:
+    log_format = os.getenv("LOG_FORMAT", "json").lower()
+    handler = logging.StreamHandler()
+    if log_format == "json":
+        handler.setFormatter(_JsonFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    logging.basicConfig(level=level, handlers=[handler], force=True)
+
+
+_configure_logging()
+
+# ── OpenTelemetry tracing (optional — degrades gracefully if SDK absent) ──────
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+    _provider = TracerProvider()
+    _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(_provider)
+    tracer = trace.get_tracer("psx-analytics")
+except ImportError:
+    tracer = None  # type: ignore[assignment]
 
 log = logging.getLogger(__name__)
 
