@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Manifest-authority microstructure analytics for PSX EOD equity data"
 requires-python = ">=3.11"
 dependencies = [
-    "duckdb>=0.10.0,<1.0.0",
+    "duckdb>=0.10.0,<2.0.0",
     "pandas>=2.1.0,<3.0.0",
     "pyarrow>=14.0.0,<16.0.0",
     "fastapi>=0.109.0,<1.0.0",
