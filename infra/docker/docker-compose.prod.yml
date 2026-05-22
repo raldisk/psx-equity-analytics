@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  psx_api:
+    image: ghcr.io/raldisk/psx-analytics:${IMAGE_TAG:-latest}
+    ports: ["8000:8000"]
+    volumes:
+      - psx_data:/data
+    environment:
+      PSX_DATA_ROOT: /data
+      PSX_MAX_DATE_RANGE_DAYS: ${PSX_MAX_DATE_RANGE_DAYS:-90}
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  psx_data:

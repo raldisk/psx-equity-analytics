@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  psx_api_test:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    environment:
+      PSX_DATA_ROOT: /tmp/test_data
+      PSX_MAX_DATE_RANGE_DAYS: 90
+    tmpfs: ["/tmp/test_data"]
+    ports: ["8001:8000"]

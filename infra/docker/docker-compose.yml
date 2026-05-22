@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  psx_api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    ports: ["8000:8000"]
+    volumes:
+      - psx_data:/data
+      - ../../serving:/opt/psx/serving:ro   # live-reload in dev
+    environment:
+      PSX_DATA_ROOT: /data
+      LOG_LEVEL: DEBUG
+
+volumes:
+  psx_data:

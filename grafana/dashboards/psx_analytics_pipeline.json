@@ -1,0 +1,131 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "PSX Analytics Pipeline — API latency, DuckDB growth, SARIMA outcomes",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"psx-analytics-api\"}[5m])) by (le))",
+          "legendFormat": "p95 latency",
+          "refId": "A"
+        }
+      ],
+      "title": "API p95 Latency (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "duckdb_table_rows_total{table=\"fact_daily_analytics\"}",
+          "legendFormat": "fact_daily_analytics rows",
+          "refId": "A"
+        }
+      ],
+      "title": "DuckDB Row Growth — fact_daily_analytics",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "duckdb_wal_present",
+          "legendFormat": "WAL present",
+          "refId": "A"
+        }
+      ],
+      "title": "DuckDB WAL Presence (should be 0 at rest)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "duckdb_db_bytes_total",
+          "legendFormat": "DB file size",
+          "refId": "A"
+        }
+      ],
+      "title": "DuckDB File Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"psx-analytics-api\",status=~\"5..\"}[5m])",
+          "legendFormat": "5xx error rate",
+          "refId": "A"
+        }
+      ],
+      "title": "API 5xx Error Rate (5m)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["psx", "analytics", "duckdb"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PSX Analytics Pipeline",
+  "uid": "psx-analytics-pipeline",
+  "version": 1
+}
