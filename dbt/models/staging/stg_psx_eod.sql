@@ -28,11 +28,18 @@
     tags=['staging', 'psx-eod']
 ) }}
 
+-- OPTIMIZATION NOTE: Explicit columns over read_json_auto() prevent schema drift exposure
+-- and satisfy rule 1 (no SELECT *).
 WITH manifest_source AS (
     -- Read the pre-resolved source list written by the pipeline DAG.
     -- Format: [{symbol, session_date, canonical_raw_path, row_count, amended}]
     -- This list contains ONLY canonical paths from manifest.json — never glob paths.
-    SELECT *
+    SELECT
+        symbol::VARCHAR               AS symbol,
+        session_date::DATE            AS session_date,
+        canonical_raw_path::VARCHAR   AS canonical_raw_path,
+        row_count::BIGINT             AS row_count,
+        amended::BOOLEAN              AS amended
     FROM read_json_auto('{{ env_var("PSX_DATA_ROOT", "/opt/airflow/data") }}/staging_source_list.json')
 ),
 

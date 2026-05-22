@@ -1,0 +1,43 @@
+version: 2
+models:
+  - name: stg_psx_eod
+    description: "Manifest-canonical PSX EOD staging view. F-019/F-021 enforced."
+    columns:
+      - name: symbol_code
+        description: "PSX ticker symbol"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_match_regex:
+              regex: "^[A-Z]{1,8}$"
+      - name: session_date
+        description: "Trading session date (no future dates; clock skew <= 1 day)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'2000-01-01'::date"
+              max_value: "current_date + interval '1 day'"
+      - name: close_price
+        description: "Closing price — must be strictly positive (DQ gate at staging)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0001
+              strictly: true
+      - name: open_price
+        description: "Opening price — must be strictly positive"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0001
+              strictly: true
+      - name: volume
+        description: "Total traded volume — non-negative"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              strictly: false
+      - name: is_amended
+        description: "True if this row comes from an amendment file per manifest.json"
+        tests:
+          - not_null
