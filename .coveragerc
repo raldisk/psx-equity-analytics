@@ -1,0 +1,8 @@
+[run]
+source = scripts, serving, airflow/dags
+omit = */tests/*, */migrations/*
+branch = true
+
+[report]
+fail_under = 80
+show_missing = true

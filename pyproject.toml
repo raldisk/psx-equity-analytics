@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "psx-analytics"
+version = "0.1.0"
+description = "Manifest-authority microstructure analytics for PSX EOD equity data"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=0.10.0,<1.0.0",
+    "pandas>=2.1.0,<3.0.0",
+    "pyarrow>=14.0.0,<16.0.0",
+    "fastapi>=0.109.0,<1.0.0",
+    "uvicorn[standard]>=0.27.0,<1.0.0",
+    "dbt-core>=1.7.0,<2.0.0",
+    "dbt-duckdb>=1.7.0,<2.0.0",
+    "pendulum>=3.0.0,<4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0,<9.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "httpx>=0.26.0,<1.0.0",
+    "hypothesis>=6.100.0,<7.0.0",
+    "locust>=2.24.0,<3.0.0",
+    "ruff>=0.4.0",
+    "black>=24.0.0",
+    "mypy>=1.9.0",
+    "sqlfluff>=3.0.0",
+    "yamllint>=1.35.0",
+    "pre-commit>=3.7.0",
+]
+stats = [
+    "statsmodels>=0.14.0,<0.15.0",
+    "numpy>=1.26.0,<2.0.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short -v"
+
+[tool.coverage.run]
+source = ["scripts", "serving", "airflow/dags"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
