@@ -17,14 +17,81 @@
 -- Queries doing SUM(vwap) across days are semantically wrong and should use
 -- volume-weighted averages; the mart schema documents this via column comments.
 --
+-- Edge D integration (settlement_php_flow, settlement_data_available):
+--   settlement_php_flow is a market-wide daily fact, NOT a per-symbol measure.
+--   Aggregating across symbols on the same day double-counts. Analysts must
+--   filter to one symbol per day when using this column (documented below).
+--
 -- Dependency chain:
 --   stg_psx_eod (staging view) → fact_daily_analytics (this model)
 --   corporate_action_log → (triggers computed/ versioning via Airflow)
 
 import logging
+import os
+from pathlib import Path
+
 import numpy as np
 
 log = logging.getLogger(__name__)
+
+
+def _load_settlement_enrichment(target_date_str: str | None):
+    """
+    Load settlement enrichment Parquet for the given session date.
+
+    Returns empty DataFrame (correct schema) if:
+      - File does not exist (enrichment disabled or step was skipped)
+      - File is malformed
+      - Any read error
+
+    This function NEVER raises. Callers receive an empty frame on any failure.
+
+    Args:
+        target_date_str: ISO date string e.g. '2026-05-25'.
+                         If None, returns empty frame.
+
+    Returns:
+        DataFrame with columns: settlement_date, total_php_flow,
+        participant_count, cycle_count, settlement_data_available.
+    """
+    import pandas as pd
+
+    _EMPTY = pd.DataFrame({
+        "settlement_date": pd.Series(dtype="str"),
+        "total_php_flow": pd.Series(dtype="float64"),
+        "settlement_data_available": pd.Series(dtype="bool"),
+    })
+
+    if not target_date_str:
+        return _EMPTY
+
+    data_root = Path(os.getenv("PSX_DATA_ROOT", str(Path(__file__).parent.parent.parent.parent / "data")))
+    enrichment_path = data_root / "enrichment" / f"settlement_{target_date_str}.parquet"
+
+    if not enrichment_path.exists():
+        log.debug(
+            "[fact_daily_analytics] Settlement enrichment file not found: %s. "
+            "settlement_php_flow will be NULL for this run.",
+            enrichment_path,
+        )
+        return _EMPTY
+
+    try:
+        df = pd.read_parquet(enrichment_path)
+        log.info(
+            "[fact_daily_analytics] Loaded settlement enrichment from %s: %d row(s)",
+            enrichment_path,
+            len(df),
+        )
+        return df[["settlement_date", "total_php_flow", "settlement_data_available"]]
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "[fact_daily_analytics] Could not read settlement enrichment %s: %s. "
+            "Proceeding without settlement columns.",
+            enrichment_path,
+            exc,
+        )
+        return _EMPTY
 
 
 def model(dbt, session):
@@ -32,6 +99,8 @@ def model(dbt, session):
     dbt Python model: compute daily analytics for all symbols.
     Returns a DataFrame matching the fact_daily_analytics schema.
     """
+    import pandas as pd
+
     # Read staging data
     stg = dbt.ref("stg_psx_eod")
     df  = stg.df()
@@ -50,6 +119,15 @@ def model(dbt, session):
         total_value =("value", "sum"),
         trade_count =("price", "count"),
     ).reset_index()
+
+    # Preserve session_date (calendar date string) alongside session_date_key
+    # Required for the settlement enrichment join below.
+    if "session_date" in df.columns:
+        date_map = (
+            df[["symbol_key", "session_date_key", "session_date"]]
+            .drop_duplicates(subset=["symbol_key", "session_date_key"])
+        )
+        daily = daily.merge(date_map, on=["symbol_key", "session_date_key"], how="left")
 
     # ── Compute non-additive measures at correct daily grain (F-023) ─────────
     # VWAP = total_value / total_volume (defined at daily grain)
@@ -137,7 +215,6 @@ def model(dbt, session):
 
     # ── Assemble final DataFrame ───────────────────────────────────────────────
     if trend_results:
-        import pandas as pd
         result = pd.concat(trend_results, ignore_index=True)
     else:
         result = daily.copy()
@@ -164,5 +241,47 @@ def model(dbt, session):
                 "Analysts should filter on sarima_status='OK' for trend-dependent analysis.",
                 failed
             )
+
+    # ── Edge D: settlement enrichment merge (optional) ────────────────────────
+    # Merge market-wide settlement PHP flow into every symbol row for the day.
+    # The join is on session_date (calendar date), not session_date_key (surrogate).
+    # If the enrichment file is absent or R5 was unreachable, settlement columns
+    # are NULL / False — all downstream queries using these columns must be
+    # NULL-safe (COALESCE, IS NOT NULL guards).
+    #
+    # Kimball note: settlement_php_flow is a market-wide daily fact, not a
+    # per-symbol measure. Aggregating it across symbols on the same day
+    # double-counts. Analysts should filter to one symbol per day for this column.
+    # This is documented in dbt schema.yml for fact_daily_analytics.
+
+    # Use Airflow execution_date injected via dbt vars when available
+    _session_date_str: str | None = dbt.config.get("vars", {}).get("execution_date", None)
+
+    settlement_df = _load_settlement_enrichment(_session_date_str)
+
+    if not settlement_df.empty and "session_date" in result.columns:
+        # Normalise types for safe join
+        result["_session_date_str"] = result["session_date"].astype(str)
+        settlement_df = settlement_df.rename(columns={"settlement_date": "_session_date_str"})
+
+        result = result.merge(
+            settlement_df[["_session_date_str", "total_php_flow", "settlement_data_available"]],
+            on="_session_date_str",
+            how="left",
+        ).drop(columns=["_session_date_str"])
+
+        result = result.rename(columns={"total_php_flow": "settlement_php_flow"})
+        result["settlement_data_available"] = result["settlement_data_available"].fillna(False)
+    else:
+        # Enrichment absent or session_date column unavailable — add NULL columns
+        result["settlement_php_flow"] = None
+        result["settlement_data_available"] = False
+
+    log.info(
+        "[fact_daily_analytics] Settlement enrichment: %d rows with settlement_data_available=True",
+        int(result["settlement_data_available"].sum())
+        if "settlement_data_available" in result.columns else 0,
+    )
+    # ── End Edge D settlement merge ───────────────────────────────────────────
 
     return result

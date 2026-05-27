@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: fact_daily_analytics
+    description: >
+      Daily PSX analytics mart at (symbol_key, session_date_key) grain.
+      Computed by the dbt Python model — includes OHLCV aggregations,
+      VWAP, Amihud illiquidity, price impact bps, SARIMA components,
+      and optional Edge D settlement enrichment columns.
+    columns:
+      - name: symbol_key
+        description: "Surrogate key for PSX ticker symbol."
+        tests:
+          - not_null
+
+      - name: session_date_key
+        description: "Surrogate key for trading session date (YYYYMMDD integer)."
+        tests:
+          - not_null
+
+      - name: session_date
+        description: "Calendar date of the trading session (ISO string). Used as join key for settlement enrichment."
+
+      - name: open_price
+        description: "Opening price for the session. Strictly positive."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0001
+              strictly: true
+
+      - name: high_price
+        description: "Intraday high price. Must be >= open_price and close_price."
+        tests:
+          - not_null
+
+      - name: low_price
+        description: "Intraday low price. Must be <= open_price and close_price."
+        tests:
+          - not_null
+
+      - name: close_price
+        description: "Closing price for the session. Strictly positive."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0001
+              strictly: true
+
+      - name: total_volume
+        description: "Aggregate traded volume for the session. Non-negative."
+        tests:
+          - not_null
+
+      - name: total_value
+        description: "Aggregate traded value (price * volume) for the session. Non-negative."
+        tests:
+          - not_null
+
+      - name: trade_count
+        description: "Number of trades in the session. Non-negative."
+        tests:
+          - not_null
+
+      - name: vwap
+        description: >
+          Volume-weighted average price for the session.
+          NON-ADDITIVE across time — summing VWAP across multiple sessions is
+          semantically incorrect. Use volume-weighted average when aggregating.
+          NULL when total_volume = 0.
+
+      - name: amihud_illiquidity
+        description: >
+          Amihud (2002) illiquidity ratio: |daily_return| / daily_volume.
+          NON-ADDITIVE (ratio measure). NULL when prior close is unavailable
+          (first observation per symbol) or when volume = 0.
+
+      - name: price_impact_bps
+        description: >
+          Proxy price impact in basis points: (high - low) / close * 10000.
+          Approximation only — accurate decomposition requires FIX feed (F-026).
+
+      - name: trend_component
+        description: >
+          SARIMA fitted values for the close price series (F-025).
+          NULL when sarima_status != 'OK'. Analysts must filter on
+          sarima_status='OK' before using this column for trend analysis.
+
+      - name: seasonal_component
+        description: >
+          SARIMA seasonal component. Currently NULL (reserved for future
+          seasonal decomposition). See sarima_status for model outcome.
+
+      - name: sarima_status
+        description: >
+          Outcome of SARIMA fitting (F-025 isolation fix).
+          Values: OK | FAILED_CONVERGENCE | INSUFFICIENT_DATA |
+                  SKIPPED_NO_STATSMODELS | PENDING.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - OK
+                - FAILED_CONVERGENCE
+                - INSUFFICIENT_DATA
+                - SKIPPED_NO_STATSMODELS
+                - PENDING
+
+      - name: computed_version
+        description: "Version counter incremented by corporate action pipeline on restatements."
+        tests:
+          - not_null
+
+      - name: _computed_at
+        description: "dbt invocation ID of the run that produced this row. Audit trail only."
+
+      # ── Edge D: settlement enrichment columns ────────────────────────────────
+      # These columns are populated by the settlement_enrichment Airflow task
+      # (Edge D consumer from iso20022-settlement-engine / R5).
+      # When R5 is absent or SETTLEMENT_API_URL is unset, both columns are NULL/False.
+
+      - name: settlement_php_flow
+        description: >
+          Total interbank settlement PHP flow for the trading session date
+          (market-wide aggregate from iso20022-settlement-engine / R5).
+
+          IMPORTANT — NON-ADDITIVE across symbols:
+          This is a market-wide daily fact, not a per-symbol measure.
+          Summing settlement_php_flow across symbols for the same date
+          double-counts. When using this column, filter to one symbol per
+          date or use MAX/MIN rather than SUM.
+
+          NULL when settlement_data_available = FALSE (R5 absent or unreachable).
+
+      - name: settlement_data_available
+        description: >
+          Boolean flag: TRUE when settlement_php_flow was successfully fetched
+          from R5 for this session date. FALSE when R5 was absent, unreachable,
+          or SETTLEMENT_API_URL was not configured.
+          Analysts must check this column before using settlement_php_flow.
+        tests:
+          - not_null

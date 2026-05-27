@@ -1,0 +1,46 @@
+version: 2
+
+sources:
+  - name: enrichment
+    description: >
+      Enrichment Parquet files written by optional upstream integrations.
+      These are not primary data sources — they are additive overlays produced
+      by pre-DAG tasks (Airflow) that pull from peer services.
+
+      Design contract (DDIA fault tolerance):
+        All enrichment files are always present (written by the Airflow task
+        even on failure — empty schema). Models referencing these sources will
+        always find a valid Parquet, never a missing file.
+
+    meta:
+      owner: data-engineering
+      cadence: daily (written by Airflow settlement_enrichment task)
+      boundary: Edge D — iso20022-settlement-engine (R5) consumer
+
+    tables:
+      - name: settlement
+        description: >
+          Daily interbank settlement PHP flow from iso20022-settlement-engine (R5).
+          Written by scripts/settlement_enrichment.py via the Airflow
+          settlement_enrichment task.
+
+          File location: {PSX_DATA_ROOT}/enrichment/settlement_{YYYY-MM-DD}.parquet
+          Grain: one row per settlement_date (market-wide daily fact, NOT per-symbol).
+
+          Columns:
+            settlement_date           — ISO date string (YYYY-MM-DD)
+            total_php_flow            — total PHP settled (float64); NULL if R5 unreachable
+            participant_count         — number of participating banks (int64)
+            cycle_count               — number of settlement cycles (int64)
+            settlement_data_available — TRUE when total_php_flow is populated (bool)
+
+          Absence contract:
+            When SETTLEMENT_API_URL is unset or R5 is unreachable, the enrichment
+            task writes an empty Parquet (0 rows, correct schema). Downstream models
+            receive NULL settlement columns, not an error.
+
+          Kimball grain note:
+            settlement_php_flow is a market-wide daily aggregate. Joining this to
+            fact_daily_analytics (which is per-symbol) copies the same value to every
+            symbol row for that date. SUM(settlement_php_flow) across symbols
+            double-counts. Use MAX or MIN, or filter to one symbol per date.
