@@ -29,3 +29,31 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
+
+  isolation-tests:
+    # Fitness function: R4 must operate fully without R5 (Edge D invariant).
+    # This job runs with ALL cross-repo URL env vars explicitly absent.
+    # Failure here means the isolation contract is broken — block the PR.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      # Explicitly absent — any accidental presence would invalidate the test
+      SETTLEMENT_API_URL: ""
+      PSX_DATA_ROOT: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install pandas pyarrow httpx pytest
+      - name: Verify isolation env vars are absent
+        run: |
+          [ -z "$SETTLEMENT_API_URL" ] || (echo "SETTLEMENT_API_URL must be unset for isolation tests" && exit 1)
+      - name: Run isolation tests (no peer services required)
+        run: |
+          pytest tests/unit/test_settlement_enrichment_isolation.py -v \
+            --tb=short \
+            -p no:warnings
