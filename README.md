@@ -8,7 +8,22 @@
 
 > **psx-analytics** — Manifest-authority, memory-bounded microstructure analytics platform for Philippine Stock Exchange EOD equity data with corporate-action versioning and isolated serving.
 
-**Ecosystem context:** Operates fully independently — downstream consumer of no other pipeline in this ecosystem. The DuckDB file is file-local; there is no shared database instance with P2 (credit-risk-dwh) or P6 (p6-settlement). Airflow is shared with P2 (same Airflow 2.8.0 installation) but the `psx_pipeline_dag` is isolated to its own pool and connection. P2 and P6 have no dependency on this platform's DuckDB file or FastAPI serving layer.
+## Part of the Philippine Financial Data Platform
+
+| Repository | Role | Port |
+|---|---|---|
+| [econ-intel-platform](https://github.com/raldisk/econ-intel-platform) | Unified intelligence hub — downstream consumer of all enrichment edges | 8001 |
+| [ph-macro-lakehouse](https://github.com/raldisk/ph-macro-lakehouse) | Gold-layer macro data pipeline — FX rates and macro indicators via Parquet/S3 | 8000 |
+| [psx-equity-analytics](https://github.com/raldisk/psx-equity-analytics) | PSX equity microstructure analytics — VWAP, Amihud illiquidity, SARIMA trend | **8004** |
+| [bsp-credit-risk-warehouse](https://github.com/raldisk/bsp-credit-risk-warehouse) | BSP Circular 855 regulatory credit exposure DWH — monthly closed-period serving | 8003 |
+| [iso20022-settlement-engine](https://github.com/raldisk/iso20022-settlement-engine) | ISO 20022 pacs.008 interbank settlement ledger — daily bilateral PHP flow serving | 8002 |
+
+Each repository is independently deployable and self-sufficient. Cross-repo data flows are optional enrichment edges — any repository operates fully without its peers.
+
+**This repository** has two platform roles:
+- **Producer** → [`econ-intel-platform`](https://github.com/raldisk/econ-intel-platform) optionally calls `GET /analytics/daily` (port 8004 in single-machine dev) for VWAP, Amihud illiquidity, and SARIMA trend enrichment.
+- **Consumer** → optionally receives daily interbank settlement PHP flow from [`iso20022-settlement-engine`](https://github.com/raldisk/iso20022-settlement-engine) (`SETTLEMENT_API_URL`). When set, `settlement_php_flow` appears in `fact_daily_analytics`; when absent, the column is NULL and the pipeline continues normally.
+
 
 ---
 
