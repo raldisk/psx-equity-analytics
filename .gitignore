@@ -20,3 +20,4 @@ backup/
 htmlcov/
 .coverage
 *.junit.xml
+*.zip
