@@ -21,11 +21,21 @@ Task dependency chain:
       ↓
   dbt_staging_run                (reads from manifest-path source, not glob)
       ↓
+  settlement_enrichment          (Edge D — optional R5 consumer; always succeeds)
+      ↓
   dbt_marts_run                  (fact_daily_analytics: F-023 grain, F-025 SARIMA isolation)
       ↓
   dq_assertions                  (DQ gate — completeness and range checks)
       ↓
   update_serving_metadata        (marks pipeline run complete in manifest)
+
+Edge D integration notes:
+  settlement_enrichment runs between dbt_staging and dbt_marts. It fetches
+  daily interbank settlement PHP flow from iso20022-settlement-engine (R5) and
+  writes data/enrichment/settlement_{date}.parquet. On any failure (R5 absent,
+  timeout, bad response) it writes an empty Parquet and succeeds — pipeline is
+  never blocked. dbt_marts uses trigger_rule='all_done' so it runs even in the
+  unexpected event settlement_enrichment raises at the Python level.
 
 DQ gate behavior:
   dbt test failures log WARNING and do NOT block the pipeline by default.
@@ -49,6 +59,11 @@ from airflow import DAG
 from airflow.exceptions import AirflowException, AirflowSkipException
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
+
+# ── Settlement enrichment (Edge D — optional R5 consumer) ────────────────────
+# Import is deferred to inside the callable to match existing DAG pattern.
+# SETTLEMENT_API_URL absent → fetch_and_write writes empty Parquet, task succeeds.
+from datetime import date as _date
 
 log = logging.getLogger(__name__)
 
@@ -184,6 +199,31 @@ def run_dbt(select: str, **context) -> None:
         raise AirflowException(f"dbt run failed (exit {proc.returncode}):\n{proc.stderr[-1000:]}")
 
 
+def run_settlement_enrichment(**context) -> None:
+    """
+    Optional pre-step: fetch bilateral settlement flow from R5.
+
+    Design contract:
+      - Always succeeds (non-fatal). Empty Parquet written on any failure.
+      - Airflow task failure therefore signals a programming error, not an R5 outage.
+      - SETTLEMENT_API_URL absent → enrichment silently disabled.
+
+    Trigger rule on THIS task: default (all_success).
+    Trigger rule on downstream dbt_marts: all_done (set on that task).
+    This ensures dbt_marts runs whether this task succeeds or is skipped.
+    """
+    import sys
+    from pathlib import Path
+
+    # Add scripts/ to path so dbt env can find settlement_enrichment
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
+    from settlement_enrichment import fetch_and_write
+
+    execution_date = context.get("ds")
+    target = _date.fromisoformat(execution_date) if execution_date else _date.today()
+    fetch_and_write(target)
+
+
 def run_dq_assertions(**context) -> None:
     """
     Run dbt tests. Behavior controlled by PSX_DQ_HARD_FAIL env var:
@@ -300,10 +340,29 @@ with DAG(
         op_kwargs={"select": "staging"},
     )
 
+    # ── Edge D Consumer: optional R5 settlement enrichment ───────────────────
+    settlement_enrichment = PythonOperator(
+        task_id="settlement_enrichment",
+        python_callable=run_settlement_enrichment,
+        pool="psx_pool",          # same pool as sibling tasks — respects concurrency limits
+        dag=dag,
+        doc_md="""
+        **Edge D Consumer — Optional R5 settlement enrichment.**
+
+        Fetches daily interbank settlement PHP flow from iso20022-settlement-engine.
+        Writes data/enrichment/settlement_{date}.parquet regardless of outcome.
+        If SETTLEMENT_API_URL is unset or R5 is unreachable, writes empty Parquet and succeeds.
+
+        The downstream dbt_marts task uses trigger_rule='all_done' so it runs
+        even in the (unexpected) event this task fails at the Python level.
+        """,
+    )
+
     dbt_marts = PythonOperator(
         task_id="dbt_marts_run",
         python_callable=run_dbt,
         op_kwargs={"select": "marts"},
+        trigger_rule="all_done",   # Run even if settlement_enrichment task fails
     )
 
     dq_gate = PythonOperator(
@@ -318,13 +377,14 @@ with DAG(
 
     end = EmptyOperator(task_id="end")
 
-    # Dependency chain — no branching; fully sequential for DuckDB write-lock safety
+    # Dependency chain — settlement_enrichment inserted between staging and marts
     (
         start
         >> detect
         >> ingest
         >> init_schema
         >> dbt_staging
+        >> settlement_enrichment
         >> dbt_marts
         >> dq_gate
         >> update_meta
