@@ -85,9 +85,29 @@ validated AS (
         AND r.volume >= 0
         -- Reject future-dated records (clock skew protection)
         AND r.session_date <= current_date + INTERVAL '1 day'
+),
+
+-- Correction 3: resolve surrogate keys required by fact_daily_analytics.py.
+-- fact_daily_analytics groups on ["symbol_key", "session_date_key"] (INTEGER
+-- surrogates). Without this JOIN, the pandas groupby operates on NaN columns
+-- and silently produces wrong output.
+-- LEFT JOIN preserves all validated rows; WHERE clause below filters rows
+-- with no dim match so they do not pollute the mart with NULL surrogate keys.
+-- Prerequisite: Airflow DAG must ensure dim_symbol and dim_session are
+-- populated before the dbt_staging_run task executes.
+with_surrogate_keys AS (
+    SELECT
+        v.*,
+        ds.symbol_key,
+        sess.session_date_key
+    FROM validated v
+    LEFT JOIN main.dim_symbol  ds   ON ds.symbol_code   = v.symbol_code
+    LEFT JOIN main.dim_session sess ON sess.session_date = v.session_date
 )
 
 SELECT
+    symbol_key,
+    session_date_key,
     symbol_code,
     session_date,
     open_price,
@@ -100,4 +120,6 @@ SELECT
     source_file,
     sha256,
     is_amended
-FROM validated
+FROM with_surrogate_keys
+WHERE symbol_key      IS NOT NULL   -- reject rows with no dim_symbol match
+  AND session_date_key IS NOT NULL  -- reject rows with no dim_session match
